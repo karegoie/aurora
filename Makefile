@@ -3,13 +3,15 @@
 
 CC = gcc
 CXX = g++
-CFLAGS = -O3 -Wall -std=c11 -fopenmp
-CXXFLAGS = -O3 -Wall -std=c++17 -fopenmp
+# Compile with debug symbols for troubleshooting crashes. Use -O1 to keep
+# optimizations light while preserving useful debug information.
+CFLAGS = -O1 -g -Wall -std=c11 -fopenmp
+CXXFLAGS = -O1 -g -Wall -std=c++17 -fopenmp
 LDFLAGS = -fopenmp
 
 # Library paths and flags
 # Note: Adjust these paths based on your system
-FFTW_LIBS = -lfftw3 -lfftw3_omp -lm
+FFTW_LIBS = -lfftw3 -lm
 TORCH_PREFIX = $(PWD)/libtorch
 TORCH_LIB_DIR = $(TORCH_PREFIX)/lib
 # Use dynamic linking for libtorch by default (shared libs in libtorch/lib)

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <fftw3.h>
+#include <string.h>
 
 /* Some editors/compilers may not have OpenMP headers available. Guard the
  * include to avoid red squiggles in editors and allow building without
@@ -50,6 +51,12 @@ CWTFeatures *compute_cwt(const cplx_t *signal, size_t length,
         fprintf(stderr, "Error: Invalid input parameters to compute_cwt\n");
         return NULL;
     }
+    /* Validate scale parameters early to avoid domain errors (log, sqrt, etc.) */
+    if (min_scale <= 0.0 || max_scale <= 0.0 || min_scale >= max_scale) {
+        fprintf(stderr, "Error: Invalid scale range: min_scale=%f max_scale=%f\n",
+                min_scale, max_scale);
+        return NULL;
+    }
     
     /* Allocate CWT features structure */
     CWTFeatures *features = (CWTFeatures *)malloc(sizeof(CWTFeatures));
@@ -82,12 +89,11 @@ CWTFeatures *compute_cwt(const cplx_t *signal, size_t length,
         }
     }
     
-    /* Prepare FFTW plans (thread-safe initialization) */
-    #pragma omp critical
-    {
-        fftw_init_threads();
-        fftw_plan_with_nthreads(omp_get_max_threads());
-    }
+    /* Ensure FFTW internal multithreading is not used by this program.
+     * We rely on the system FFTW library being the single-threaded variant
+     * (or we avoid calling the threading APIs). Do not call
+     * fftw_init_threads()/fftw_plan_with_nthreads() so that FFTW stays
+     * single-threaded. */
     
     /* Compute scales logarithmically */
     double *scales = (double *)malloc(num_scales * sizeof(double));
@@ -97,17 +103,49 @@ CWTFeatures *compute_cwt(const cplx_t *signal, size_t length,
         return NULL;
     }
     
+    /* Compute logarithmically spaced scales. Handle the degenerate case
+     * where num_scales == 1 to avoid division by zero. */
     double log_min = log(min_scale);
     double log_max = log(max_scale);
-    for (int s = 0; s < num_scales; s++) {
-        double t = (double)s / (num_scales - 1);
-        scales[s] = exp(log_min + t * (log_max - log_min));
+    if (num_scales == 1) {
+        scales[0] = min_scale;
+    } else {
+        for (int s = 0; s < num_scales; s++) {
+            double t = (double)s / (double)(num_scales - 1);
+            scales[s] = exp(log_min + t * (log_max - log_min));
+        }
     }
     
-    /* Compute CWT for each scale in parallel */
-    #pragma omp parallel for schedule(dynamic)
+    /* Allow disabling OpenMP parallelism at runtime for debugging.
+     * Setting AURORA_CWT_SINGLE_THREAD=1 will run the loop serially which
+     * helps isolate crashes caused by FFTW/OpenMP interactions. */
+    /* Default: do not use OpenMP parallel loop because some FFTW builds
+     * and OpenMP can interact badly and cause crashes. Allow overriding
+     * with AURORA_CWT_SINGLE_THREAD=0 to enable parallel execution. */
+    int use_parallel = 0;
+    const char *env = getenv("AURORA_CWT_SINGLE_THREAD");
+    if (env) {
+        if (strcmp(env, "1") == 0) {
+            use_parallel = 0;
+        } else if (strcmp(env, "0") == 0) {
+            use_parallel = 1;
+        }
+    }
+
+    /* Optional debug logging: set DEBUG_CWT=1 to print per-scale progress */
+    int debug_cwt = 0;
+    const char *dbg = getenv("DEBUG_CWT");
+    if (dbg && strcmp(dbg, "1") == 0) debug_cwt = 1;
+
+    /* Compute CWT for each scale; OpenMP will only create a parallel region
+     * if use_parallel is non-zero. */
+    #pragma omp parallel for if(use_parallel) schedule(dynamic)
     for (int s = 0; s < num_scales; s++) {
         double scale = scales[s];
+        if (debug_cwt) {
+            fprintf(stderr, "[CWT] thread %d processing scale %d/%d (scale=%f)\n",
+                    (int)omp_get_thread_num(), s, num_scales, scale);
+        }
         
         /* Prepare signal and wavelet for FFT */
     fftw_complex *sig_fft = fftw_alloc_complex(length);

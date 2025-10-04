@@ -12,13 +12,17 @@ struct TransformerActorCriticImpl : torch::nn::Module {
     torch::nn::TransformerEncoder encoder{nullptr};
     torch::nn::Linear actor_head{nullptr};
     torch::nn::Linear critic_head{nullptr};
+    torch::nn::Linear input_proj{nullptr};
     
     int d_model;
     int num_labels;
     
     TransformerActorCriticImpl(int d_model_, int nhead, int num_layers, 
-                               int dim_feedforward, int num_labels_)
+                               int dim_feedforward, int num_labels_,
+                               int input_dim_ = -1)
         : d_model(d_model_), num_labels(num_labels_) {
+
+        int input_dim = (input_dim_ == -1) ? d_model_ : input_dim_;
         
         // Transformer encoder
         auto encoder_layer = torch::nn::TransformerEncoderLayer(
@@ -30,6 +34,13 @@ struct TransformerActorCriticImpl : torch::nn::Module {
         encoder = torch::nn::TransformerEncoder(
             torch::nn::TransformerEncoderOptions(encoder_layer, num_layers)
         );
+        
+        /* Optional input projection: if the incoming state vector size differs
+         * from d_model, project it to the model dimension. */
+        if (input_dim != d_model_) {
+            input_proj = register_module("input_proj",
+                                         torch::nn::Linear(input_dim, d_model_));
+        }
         
         // Actor head (policy)
         actor_head = register_module("actor_head", 
@@ -44,6 +55,16 @@ struct TransformerActorCriticImpl : torch::nn::Module {
     
     std::pair<torch::Tensor, torch::Tensor> forward(torch::Tensor x) {
         // x shape: [seq_len, batch, d_model]
+        // If input last-dim doesn't match d_model, project it.
+        if (x.size(2) != d_model) {
+            auto seq_len = x.size(0);
+            auto batch = x.size(1);
+            auto feat = x.size(2);
+            auto x_flat = x.view({seq_len * batch, feat});
+            auto proj = input_proj->forward(x_flat);
+            x = proj.view({seq_len, batch, d_model});
+        }
+
         auto encoded = encoder->forward(x);
         
         // Get last time step
@@ -272,9 +293,12 @@ int run_training(const char *fasta_file, const char *gff_file,
         
     // Create model
     (void)config; // keep config referenced to avoid unused warnings in some builds
+    // Compute expected state dimension: window of CWT magnitudes + one-hot prev action
+    int state_dim = config->window_size * (int)features->num_scales + NUM_LABELS;
     TransformerActorCritic model(config->d_model, config->nhead,
                                     config->num_encoder_layers,
-                                    config->dim_feedforward, NUM_LABELS);
+                                    config->dim_feedforward, NUM_LABELS,
+                                    state_dim);
         
         // Train
         std::cout << "Training model..." << std::endl;
@@ -304,7 +328,8 @@ int run_inference(const char *model_file, const CWTFeatures *features,
         std::cout << "Loading model from " << model_file << std::endl;
         
         // Create model (parameters will be loaded)
-        TransformerActorCritic model(256, 8, 6, 1024, NUM_LABELS);
+    // Inference: states are padded to 256 in this code path, so use input_dim=256
+    TransformerActorCritic model(256, 8, 6, 1024, NUM_LABELS, 256);
         torch::load(model, model_file);
         model->eval();
         
