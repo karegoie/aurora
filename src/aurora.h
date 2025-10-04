@@ -31,6 +31,7 @@ typedef struct {
     int batch_size;           /* Batch size for training */
     double gamma;             /* Discount factor for RL */
     double clip_epsilon;      /* Clipping parameter for PPO */
+    int num_update_epochs;    /* PPO update epochs per collected batch */
     
     /* Model architecture */
     int d_model;              /* Transformer model dimension */

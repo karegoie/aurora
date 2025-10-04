@@ -6,7 +6,7 @@ CXX = g++
 # Compile with debug symbols for troubleshooting crashes. Use -O1 to keep
 # optimizations light while preserving useful debug information.
 CFLAGS = -O1 -g -Wall -std=c11 -fopenmp
-CXXFLAGS = -O1 -g -Wall -std=c++17 -fopenmp
+CXXFLAGS = -O1 -g -Wall -std=c++17 -fopenmp -Wno-dangling-reference
 LDFLAGS = -fopenmp
 
 # Library paths and flags

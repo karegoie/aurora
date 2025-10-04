@@ -16,6 +16,7 @@ void init_default_config(AuroraConfig *config) {
     config->batch_size = 32;
     config->gamma = 0.99;
     config->clip_epsilon = 0.2;
+    config->num_update_epochs = 4;
     
     /* Model architecture */
     config->d_model = 256;
@@ -89,6 +90,8 @@ int parse_config(const char *filename, AuroraConfig *config) {
             config->gamma = atof(value);
         } else if (strcmp(key, "clip_epsilon") == 0) {
             config->clip_epsilon = atof(value);
+        } else if (strcmp(key, "num_update_epochs") == 0) {
+            config->num_update_epochs = atoi(value);
         } else if (strcmp(key, "d_model") == 0) {
             config->d_model = atoi(value);
         } else if (strcmp(key, "nhead") == 0) {

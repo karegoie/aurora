@@ -17,7 +17,8 @@ int save_config_json(const AuroraConfig *config, const char *filename) {
     fprintf(fp, "  \"d_model\": %d,\n", config->d_model);
     fprintf(fp, "  \"nhead\": %d,\n", config->nhead);
     fprintf(fp, "  \"num_encoder_layers\": %d,\n", config->num_encoder_layers);
-    fprintf(fp, "  \"dim_feedforward\": %d\n", config->dim_feedforward);
+    fprintf(fp, "  \"dim_feedforward\": %d,\n", config->dim_feedforward);
+    fprintf(fp, "  \"num_update_epochs\": %d\n", config->num_update_epochs);
     fprintf(fp, "}\n");
     
     fclose(fp);
@@ -53,6 +54,8 @@ int load_config_json(AuroraConfig *config, const char *filename) {
             config->num_encoder_layers = int_val;
         } else if (sscanf(line, "  \"dim_feedforward\": %d", &int_val) == 1) {
             config->dim_feedforward = int_val;
+        } else if (sscanf(line, "  \"num_update_epochs\": %d", &int_val) == 1) {
+            config->num_update_epochs = int_val;
         }
     }
     
