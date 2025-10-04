@@ -1,9 +1,33 @@
 #!/bin/bash
 set -e
 
-sudo apt-get update
-# Install fftw (already required) and libgomp runtime
-sudo apt-get install -y libfftw3-dev libgomp1
+# Detect available package manager and install required packages.
+# Supports: apt-get (Debian/Ubuntu), dnf (Fedora/RHEL), yum (older RHEL/CentOS).
+install_packages() {
+    # Package names differ between Debian and Fedora/RHEL families
+    packages_apt=(libfftw3-dev libgomp1)
+    packages_dnf=(fftw-devel libgomp)
+
+    if command -v apt-get >/dev/null 2>&1; then
+        echo "Detected apt-get, using apt to install packages..."
+        sudo apt-get update
+        sudo apt-get install -y "${packages_apt[@]}"
+    elif command -v dnf >/dev/null 2>&1; then
+        echo "Detected dnf, using dnf to install packages..."
+        # refresh cache then install
+        sudo dnf makecache --refresh || true
+        sudo dnf -y install "${packages_dnf[@]}"
+    elif command -v yum >/dev/null 2>&1; then
+        echo "Detected yum, using yum to install packages..."
+        sudo yum makecache fast || true
+        sudo yum -y install "${packages_dnf[@]}"
+    else
+        echo "No supported package manager detected (apt-get/dnf/yum). Please install FFTW and libgomp manually." >&2
+        return 1
+    fi
+}
+
+install_packages
 
 LIBTORCH_DIR="libtorch"
 # Allow overriding the libtorch version via env var, default to 2.8.0
