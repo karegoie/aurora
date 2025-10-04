@@ -1,0 +1,31 @@
+# Build artifacts
+*.o
+*.a
+*.so
+*.dylib
+aurora
+test_basic
+
+# Model files
+*.pt
+*.json
+
+# Data files (optional - uncomment if needed)
+# *.fasta
+# *.gff
+# *.gff3
+
+# Editor files
+*.swp
+*.swo
+*~
+.DS_Store
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-*
+
+# Other
+core
+core.*
