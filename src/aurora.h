@@ -2,7 +2,18 @@
 #define AURORA_H
 
 #include <stddef.h>
+
+/* Cross-language complex type:
+ * - In C++, use std::complex<double> as cplx_t
+ * - In C, use C99 double complex as cplx_t
+ */
+#ifdef __cplusplus
+#include <complex>
+typedef std::complex<double> cplx_t;
+#else
 #include <complex.h>
+typedef double complex cplx_t;
+#endif
 
 /* Core Data Structures for Aurora Gene Predictor */
 
@@ -47,7 +58,7 @@ typedef struct {
 
 /* CWT Features Structure */
 typedef struct {
-    double complex **data;    /* 2D array: [num_scales][sequence_length] */
+    cplx_t **data;    /* 2D array: [num_scales][sequence_length] */
     size_t num_scales;        /* Number of scales */
     size_t length;            /* Sequence length */
 } CWTFeatures;
@@ -82,9 +93,17 @@ typedef enum {
 } LabelType;
 
 /* Memory management functions */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void free_fasta_data(FastaData *data);
 void free_cwt_features(CWTFeatures *features);
 void free_gene_prediction(GenePrediction *pred);
 void free_config(AuroraConfig *config);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* AURORA_H */

@@ -9,7 +9,7 @@ void test_dna_to_complex() {
     printf("Testing dna_to_complex...\n");
     
     const char *seq = "ATGC";
-    double complex *result = dna_to_complex(seq, 4);
+    cplx_t *result = dna_to_complex(seq, 4);
     
     assert(result != NULL);
     

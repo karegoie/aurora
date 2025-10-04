@@ -93,7 +93,7 @@ public:
         // Add CWT features for window
         for (int pos = start_pos; pos < end_pos; pos++) {
             for (size_t scale = 0; scale < features->num_scales; scale++) {
-                double complex val = features->data[scale][pos];
+                cplx_t val = features->data[scale][pos];
                 state_vec.push_back(std::abs(val)); // Magnitude
             }
         }
@@ -239,7 +239,7 @@ int run_training(const char *fasta_file, const char *gff_file,
                  << " (length: " << entry->length << ")" << std::endl;
         
         // Convert DNA to complex
-        double complex* complex_seq = dna_to_complex(entry->sequence, entry->length);
+    cplx_t* complex_seq = dna_to_complex(entry->sequence, entry->length);
         if (!complex_seq) {
             free_fasta_data(&fasta_data);
             return -1;
@@ -270,9 +270,9 @@ int run_training(const char *fasta_file, const char *gff_file,
         // Create environment
         RLEnvironment env(features, labels, entry->length, config->window_size);
         
-        // Create model
-        int state_dim = config->window_size * config->num_scales + NUM_LABELS;
-        TransformerActorCritic model(config->d_model, config->nhead,
+    // Create model
+    (void)config; // keep config referenced to avoid unused warnings in some builds
+    TransformerActorCritic model(config->d_model, config->nhead,
                                     config->num_encoder_layers,
                                     config->dim_feedforward, NUM_LABELS);
         
@@ -320,7 +320,7 @@ int run_inference(const char *model_file, const CWTFeatures *features,
             // Create simple state (just CWT at current position)
             std::vector<float> state_vec;
             for (size_t scale = 0; scale < features->num_scales; scale++) {
-                double complex val = features->data[scale][pos];
+                cplx_t val = features->data[scale][pos];
                 state_vec.push_back(std::abs(val));
             }
             

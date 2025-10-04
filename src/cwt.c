@@ -3,22 +3,48 @@
 #include <stdlib.h>
 #include <math.h>
 #include <fftw3.h>
-#include <omp.h>
+
+/* Some editors/compilers may not have OpenMP headers available. Guard the
+ * include to avoid red squiggles in editors and allow building without
+ * OpenMP by providing minimal fallbacks. If OpenMP is available, use it. */
+#if defined(__has_include)
+#  if __has_include(<omp.h>)
+#    include <omp.h>
+#    define AURORA_HAVE_OMP 1
+#  else
+#    define AURORA_HAVE_OMP 0
+#  endif
+#else
+/* Fallback: assume OpenMP is available when compiled with -fopenmp */
+#  if defined(_OPENMP)
+#    include <omp.h>
+#    define AURORA_HAVE_OMP 1
+#  else
+#    define AURORA_HAVE_OMP 0
+#  endif
+#endif
+
+#if !AURORA_HAVE_OMP
+/* Provide minimal stubs so code can compile and editors won't flag missing
+ * symbols. These are only used when OpenMP isn't enabled; they don't provide
+ * parallelism. */
+static inline int omp_get_max_threads(void) { return 1; }
+#endif
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
 /* Morlet wavelet function */
-static double complex morlet_wavelet(double t, double scale) {
+static cplx_t morlet_wavelet(double t, double scale) {
     const double omega0 = 6.0; /* Center frequency */
     double scaled_t = t / scale;
     double envelope = exp(-scaled_t * scaled_t / 2.0);
-    double complex oscillation = cexp(I * omega0 * scaled_t);
+    cplx_t oscillation = cexp(I * omega0 * scaled_t);
     return envelope * oscillation / sqrt(scale);
 }
 
-CWTFeatures *compute_cwt(const double complex *signal, size_t length,
+CWTFeatures *compute_cwt(const cplx_t *signal, size_t length,
                          int num_scales, double min_scale, double max_scale) {
     if (!signal || length == 0 || num_scales <= 0) {
         fprintf(stderr, "Error: Invalid input parameters to compute_cwt\n");
@@ -84,9 +110,9 @@ CWTFeatures *compute_cwt(const double complex *signal, size_t length,
         double scale = scales[s];
         
         /* Prepare signal and wavelet for FFT */
-        fftw_complex *sig_fft = fftw_alloc_complex(length);
-        fftw_complex *wav_fft = fftw_alloc_complex(length);
-        fftw_complex *conv_fft = fftw_alloc_complex(length);
+    fftw_complex *sig_fft = fftw_alloc_complex(length);
+    fftw_complex *wav_fft = fftw_alloc_complex(length);
+    fftw_complex *conv_fft = fftw_alloc_complex(length);
         
         if (!sig_fft || !wav_fft || !conv_fft) {
             fprintf(stderr, "Error: FFTW memory allocation failed\n");
@@ -98,16 +124,21 @@ CWTFeatures *compute_cwt(const double complex *signal, size_t length,
         
         /* Copy signal */
         for (size_t i = 0; i < length; i++) {
-            sig_fft[i][0] = creal(signal[i]);
-            sig_fft[i][1] = cimag(signal[i]);
+            /* Assign real and imag parts from cplx_t to fftw_complex which
+             * may be an array or C99 complex depending on FFTW build. Cast
+             * the element to double* to write real/imag consistently. */
+            double *p = (double *)&sig_fft[i];
+            p[0] = creal(signal[i]);
+            p[1] = cimag(signal[i]);
         }
         
         /* Generate wavelet at current scale */
         for (size_t i = 0; i < length; i++) {
             int t = (i <= length/2) ? (int)i : (int)i - (int)length;
-            double complex wav = morlet_wavelet((double)t, scale);
-            wav_fft[i][0] = creal(wav);
-            wav_fft[i][1] = cimag(wav);
+            cplx_t wav = morlet_wavelet((double)t, scale);
+            double *q = (double *)&wav_fft[i];
+            q[0] = creal(wav);
+            q[1] = cimag(wav);
         }
         
         /* Create FFT plans */
@@ -124,10 +155,16 @@ CWTFeatures *compute_cwt(const double complex *signal, size_t length,
         
         /* Multiply in frequency domain (convolution) */
         for (size_t i = 0; i < length; i++) {
-            double real_part = sig_fft[i][0] * wav_fft[i][0] - sig_fft[i][1] * wav_fft[i][1];
-            double imag_part = sig_fft[i][0] * wav_fft[i][1] + sig_fft[i][1] * wav_fft[i][0];
-            conv_fft[i][0] = real_part;
-            conv_fft[i][1] = imag_part;
+            /* Multiply: (a+ib)*(c+id) = (ac - bd) + i(ad + bc) */
+            double *ps = (double *)&sig_fft[i];
+            double *pw = (double *)&wav_fft[i];
+            double *pc = (double *)&conv_fft[i];
+            double a = ps[0];
+            double b = ps[1];
+            double c = pw[0];
+            double d = pw[1];
+            pc[0] = a * c - b * d;
+            pc[1] = a * d + b * c;
         }
         
         /* Inverse FFT */
@@ -135,7 +172,10 @@ CWTFeatures *compute_cwt(const double complex *signal, size_t length,
         
         /* Normalize and store results */
         for (size_t i = 0; i < length; i++) {
-            features->data[s][i] = (conv_fft[i][0] + I * conv_fft[i][1]) / (double)length;
+            /* conv_fft may be stored as real/imag pairs; construct cplx_t */
+            double *pc = (double *)&conv_fft[i];
+            cplx_t val = pc[0] + I * pc[1];
+            features->data[s][i] = val / (double)length;
         }
         
         /* Clean up */

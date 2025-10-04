@@ -10,8 +10,10 @@ LDFLAGS = -fopenmp
 # Library paths and flags
 # Note: Adjust these paths based on your system
 FFTW_LIBS = -lfftw3 -lfftw3_omp -lm
-TORCH_PREFIX = $(shell python3 -c "import torch; print(torch.utils.cmake_prefix_path)" 2>/dev/null || echo "/usr/local")
-TORCH_LIBS = -L$(TORCH_PREFIX)/lib -ltorch -lc10 -ltorch_cpu
+TORCH_PREFIX = $(PWD)/libtorch
+TORCH_LIB_DIR = $(TORCH_PREFIX)/lib
+# Use dynamic linking for libtorch by default (shared libs in libtorch/lib)
+TORCH_LIBS = -L$(TORCH_LIB_DIR) -Wl,-rpath,$(TORCH_LIB_DIR) -ltorch -ltorch_cpu -ltorch_global_deps -lc10
 TORCH_INCLUDES = -I$(TORCH_PREFIX)/include -I$(TORCH_PREFIX)/include/torch/csrc/api/include
 
 # All libraries
@@ -53,6 +55,11 @@ clean:
 
 # Phony targets
 .PHONY: all clean
+
+# Static build target: attempt to produce a statically-linked binary. Note:
+# static linking may fail if dependent libraries (e.g. libtorch) are only
+# available as shared objects. Use this target as a best-effort option.
+# (No static targets) Build uses dynamic linking for external libs by default.
 
 # Dependencies (simplified - in production, use makedepend or similar)
 src/main.o: src/main.c src/aurora.h src/config.h src/train.h src/predict.h

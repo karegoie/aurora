@@ -58,14 +58,17 @@ int parse_fasta(const char *filename, FastaData *data) {
                 data->num_entries++;
             }
             
-            /* Start new entry */
-            current_header = strdup(line + 1); /* Skip '>' */
+            /* Start new entry: duplicate header without using strdup to avoid
+             * feature-macro related implicit-declaration warnings. */
+            size_t hdr_len = strlen(line + 1);
+            current_header = (char *)malloc(hdr_len + 1);
             if (!current_header) {
                 fprintf(stderr, "Error: Memory allocation failed\n");
                 free_fasta_data(data);
                 fclose(fp);
                 return -1;
             }
+            memcpy(current_header, line + 1, hdr_len + 1);
             
             seq_capacity = 1024;
             current_seq = (char *)malloc(seq_capacity);

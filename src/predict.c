@@ -81,7 +81,7 @@ int predict_genes(const char *model_file, const char *fasta_file,
                 entry->header, entry->length);
         
         /* Convert DNA to complex */
-        double complex* complex_seq = dna_to_complex(entry->sequence, entry->length);
+    cplx_t* complex_seq = dna_to_complex(entry->sequence, entry->length);
         if (!complex_seq) {
             continue;
         }
